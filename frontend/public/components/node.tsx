@@ -128,11 +128,17 @@ const dropdownFilters = [{
 }];
 export const NodesPage = props => <ListPage {...props} ListComponent={NodesList} dropdownFilters={dropdownFilters} canExpand={true} />;
 
-const NodeGraphs = requirePrometheus(({node}) => {
+const NodeGraphs = requirePrometheus(({node, isOpenShift}) => {
   const nodeIp = _.find<{type: string, address: string}>(node.status.addresses, {type: 'InternalIP'});
   const ipQuery = nodeIp && `{instance=~'.*${nodeIp.address}.*'}`;
   const memoryLimit = units.dehumanize(node.status.allocatable.memory, 'binaryBytesWithoutB').value;
   const integerLimit = input => parseInt(input, 10);
+  const networkReceiveQuery = isOpenShift
+    ? `sum(rate(node_network_receive_bytes_total${ipQuery}[1h]))`
+    : `instance:node_network_receive_bytes:rate:sum${ipQuery}`;
+  const networkTransmitQuery = isOpenShift
+    ? `sum(rate(node_network_transmit_bytes_total${ipQuery}[1h]))`
+    : `instance:node_network_transmit_bytes:rate:sum${ipQuery}`;
 
   return <React.Fragment>
     <div className="row">
@@ -146,10 +152,10 @@ const NodeGraphs = requirePrometheus(({node}) => {
         <Line title="Number of Pods" query={ipQuery && `kubelet_running_pod_count${ipQuery}`} units="numeric" limit={integerLimit(node.status.allocatable.pods)} />
       </div>
       <div className="col-md-4">
-        <Line title="Network In" query={ipQuery && `instance:node_network_receive_bytes:rate:sum${ipQuery}`} units="decimalBytes" />
+        <Line title="Network In" query={ipQuery && networkReceiveQuery} units="decimalBytes" />
       </div>
       <div className="col-md-4">
-        <Line title="Network Out" query={ipQuery && `instance:node_network_transmit_bytes:rate:sum${ipQuery}`} units="decimalBytes" />
+        <Line title="Network Out" query={ipQuery && networkTransmitQuery} units="decimalBytes" />
       </div>
       <div className="col-md-4">
         <Line title="Filesystem" query={ipQuery && `instance:node_filesystem_usage:sum${ipQuery}`} units="decimalBytes" />
