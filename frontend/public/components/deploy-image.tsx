@@ -181,7 +181,7 @@ export class DeployImage extends React.Component<DeployImageProps, DeployImageSt
 
     const ports = getPorts(isi);
 
-    const labels = {app: name};
+    const labels = {'app.kubernetes.io/name': name};
 
     const errorState = err => this.setState({error: this.state.error ? `${this.state.error}; ${err.message}` : err.message});
 

@@ -172,7 +172,7 @@ class BuildSource extends React.Component<BuildSourceProps, BuildSourceState> {
   }
 
   getLabels() {
-    return { app: this.state.name };
+    return { 'app.kubernetes.io/name': this.state.name };
   }
 
   getPodLabels() {
