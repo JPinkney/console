@@ -799,3 +799,21 @@ export const APIServiceModel: K8sKind = {
   id: 'apiservice',
   crd: true,
 };
+
+export const ClusterOperatorModel: K8sKind = {
+  label: 'Cluster Operator',
+  labelPlural: 'Cluster Operators',
+  apiVersion: 'v1',
+  path: 'clusteroperators',
+  // TODO: Switch to new config.openshift.io API group when operators start writing status
+  // apiGroup: 'config.openshift.io',
+  apiGroup: 'operatorstatus.openshift.io',
+  plural: 'clusteroperators',
+  abbr: 'CO',
+  // TODO: This will not be namespaced in the future.
+  // namespaced: false,
+  namespaced: true,
+  kind: 'ClusterOperator',
+  id: 'clusteroperator',
+  crd: true,
+};

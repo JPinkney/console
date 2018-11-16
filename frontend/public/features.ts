@@ -4,7 +4,17 @@ import { connect } from 'react-redux';
 import { Map as ImmutableMap } from 'immutable';
 import * as _ from 'lodash-es';
 
-import { SelfSubjectAccessReviewModel, ChannelOperatorConfigModel, PrometheusModel, ClusterServiceVersionModel, ClusterModel, ChargebackReportModel, ClusterServiceClassModel, PackageManifestModel } from './models';
+import {
+  ChannelOperatorConfigModel,
+  ChargebackReportModel,
+  ClusterModel,
+  ClusterOperatorModel,
+  ClusterServiceClassModel,
+  ClusterServiceVersionModel,
+  PackageManifestModel,
+  PrometheusModel,
+  SelfSubjectAccessReviewModel,
+} from './models';
 import { k8sBasePath, referenceForModel } from './module/k8s/k8s';
 import { k8sCreate } from './module/k8s/resource';
 import { types } from './module/k8s/k8s-actions';
@@ -44,10 +54,12 @@ export enum FLAGS {
   CAN_LIST_PV = 'CAN_LIST_PV',
   CAN_LIST_STORE = 'CAN_LIST_STORE',
   CAN_LIST_CRD = 'CAN_LIST_CRD',
+  CAN_LIST_CLUSTER_OPERATOR = 'CAN_LIST_CLUSTER_OPERATOR',
   CAN_CREATE_PROJECT = 'CAN_CREATE_PROJECT',
   PROJECTS_AVAILABLE = 'PROJECTS_AVAILABLE',
   SERVICE_CATALOG = 'SERVICE_CATALOG',
   KUBERNETES_MARKETPLACE = 'KUBERNETES_MARKETPLACE',
+  CLUSTER_OPERATOR = 'CLUSTER_OPERATOR',
 }
 
 export const DEFAULTS_ = _.mapValues(FLAGS, flag => flag === FLAGS.AUTH_ENABLED
@@ -63,6 +75,7 @@ export const CRDs = {
   [referenceForModel(ClusterServiceClassModel)]: FLAGS.SERVICE_CATALOG,
   [referenceForModel(ClusterServiceVersionModel)]: FLAGS.OPERATOR_LIFECYCLE_MANAGER,
   [referenceForModel(PackageManifestModel)]: FLAGS.KUBERNETES_MARKETPLACE,
+  [referenceForModel(ClusterOperatorModel)]: FLAGS.CLUSTER_OPERATOR,
 };
 
 const SET_FLAG = 'SET_FLAG';
@@ -137,6 +150,7 @@ export let featureActions = [
   [FLAGS.CAN_LIST_PV, { resource: 'persistentvolumes', verb: 'list' }],
   [FLAGS.CAN_LIST_STORE, { group: 'storage.k8s.io', resource: 'storageclasses', verb: 'list' }],
   [FLAGS.CAN_LIST_CRD, { group: 'apiextensions.k8s.io', resource: 'customresourcedefinitions', verb: 'list' }],
+  [FLAGS.CAN_LIST_CLUSTER_OPERATOR, { group: ClusterOperatorModel.apiGroup, resource: ClusterOperatorModel.plural, verb: 'list' }],
 ].forEach(_.spread((FLAG, resourceAttributes) => {
   const req = {
     spec: { resourceAttributes },

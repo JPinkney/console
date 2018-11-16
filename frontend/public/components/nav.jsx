@@ -8,7 +8,18 @@ import * as PropTypes from 'prop-types';
 import { FLAGS, connectToFlags, featureReducerName, flagPending } from '../features';
 import { MonitoringRoutes, connectToURLs } from '../monitoring';
 import { formatNamespacedRouteForResource } from '../ui/ui-actions';
-import { BuildConfigModel, BuildModel, ClusterServiceVersionModel, DeploymentConfigModel, ImageStreamModel, SubscriptionModel, InstallPlanModel, PackageManifestModel, ChargebackReportModel } from '../models';
+import {
+  BuildConfigModel,
+  BuildModel,
+  ChargebackReportModel,
+  ClusterOperatorModel,
+  ClusterServiceVersionModel,
+  DeploymentConfigModel,
+  ImageStreamModel,
+  InstallPlanModel,
+  PackageManifestModel,
+  SubscriptionModel,
+} from '../models';
 import { referenceForModel } from '../module/k8s';
 import { authSvc } from '../module/auth';
 
@@ -446,6 +457,8 @@ export class Nav extends React.Component {
           <NavSection text="Administration" icon="fa fa-cog">
             <ResourceClusterLink resource="namespaces" name="Namespaces" onClick={this.close} required={FLAGS.CAN_LIST_NS} />
             <ResourceClusterLink resource="nodes" name="Nodes" onClick={this.close} required={FLAGS.CAN_LIST_NODE} />
+            { /* FIXME: CAN_LIST_CLUSTER_OPERATOR will always be true for cluster-admin, even if the resource doesn't exist. We need to be able to pass an array as a required prop */ }
+            <ResourceClusterLink resource={referenceForModel(ClusterOperatorModel)} name="Cluster Operators" onClick={this.close} required={FLAGS.CAN_LIST_CLUSTER_OPERATOR} />
             <HrefLink href="/settings/cluster" name="Cluster Settings" onClick={this.close} startsWith={clusterSettingsStartsWith} disallowed={FLAGS.OPENSHIFT} />
             <ResourceNSLink resource="serviceaccounts" name="Service Accounts" onClick={this.close} />
             <ResourceNSLink resource="roles" name="Roles" startsWith={rolesStartsWith} onClick={this.close} />

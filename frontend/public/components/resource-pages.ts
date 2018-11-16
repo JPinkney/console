@@ -10,6 +10,7 @@ import {
   BuildModel,
   CatalogSourceModel,
   ClusterModel,
+  ClusterOperatorModel,
   ClusterRoleModel,
   ClusterServiceBrokerModel,
   ClusterServiceClassModel,
@@ -98,6 +99,7 @@ export const resourceDetailPages = ImmutableMap<GroupVersionKind | string, () =>
   .set(ReportGenerationQueryReference, () => import('./chargeback' /* webpackChunkName: "chargeback" */).then(m => m.ReportGenerationQueriesDetailsPage))
   .set(referenceForModel(StorageClassModel), () => import('./storage-class' /* webpackChunkName: "storage-class" */).then(m => m.StorageClassDetailsPage))
   .set(referenceForModel(ClusterServiceVersionModel), () => import('./operator-lifecycle-manager/clusterserviceversion' /* webpackChunkName: "clusterserviceversion" */).then(m => m.ClusterServiceVersionsDetailsPage))
+  .set(referenceForModel(ClusterOperatorModel), () => import('./cluster-operator' /* webpackChunkName: "cluster-operator" */).then(m => m.ClusterOperatorDetailsPage))
   .set(referenceForModel(CatalogSourceModel), () => import('./operator-lifecycle-manager/catalog-source' /* webpackChunkName: "catalog-source" */).then(m => m.CatalogSourceDetailsPage))
   .set(referenceForModel(SubscriptionModel), () => import('./operator-lifecycle-manager/subscription' /* webpackChunkName: "subscription" */).then(m => m.SubscriptionDetailsPage))
   .set(referenceForModel(InstallPlanModel), () => import('./operator-lifecycle-manager/install-plan' /* webpackChunkName: "install-plan" */).then(m => m.InstallPlanDetailsPage));
@@ -145,6 +147,7 @@ export const resourceListPages = ImmutableMap<GroupVersionKind | string, () => P
   .set(ReportGenerationQueryReference, () => import('./chargeback' /* webpackChunkName: "chargeback" */).then(m => m.ReportGenerationQueriesPage))
   .set(referenceForModel(StorageClassModel), () => import('./storage-class' /* webpackChunkName: "storage-class" */).then(m => m.StorageClassPage))
   .set(referenceForModel(CustomResourceDefinitionModel), () => import('./custom-resource-definition' /* webpackChunkName: "custom-resource-definition" */).then(m => m.CustomResourceDefinitionsPage))
+  .set(referenceForModel(ClusterOperatorModel), () => import('./cluster-operator' /* webpackChunkName: "cluster-operator" */).then(m => m.ClusterOperatorPage))
   .set(referenceForModel(ClusterServiceVersionModel), () => import('./operator-lifecycle-manager/clusterserviceversion' /* webpackChunkName: "clusterserviceversion" */).then(m => m.ClusterServiceVersionsPage))
   .set(referenceForModel(PackageManifestModel), () => import('./operator-lifecycle-manager/package-manifest' /* webpackChunkName: "package-manifest" */).then(m => m.PackageManifestsPage))
   .set(referenceForModel(SubscriptionModel), () => import('./operator-lifecycle-manager/subscription' /* webpackChunkName: "subscription" */).then(m => m.SubscriptionsPage))
