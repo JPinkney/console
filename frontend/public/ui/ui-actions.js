@@ -68,7 +68,7 @@ export const types = {
   dismissOverviewDetails: 'dismissOverviewDetails',
   selectOverviewDetailsTab: 'selectOverviewDetailsTab',
   selectOverviewItem: 'selectOverviewItem',
-  selectOverviewView: 'selectOverviewView',
+  selectOverviewPerspective: 'selectOverviewPerspective',
   setActiveNamespace: 'setActiveNamespace',
   setCreateProjectMessage: 'setCreateProjectMessage',
   setCurrentLocation: 'setCurrentLocation',
@@ -162,7 +162,7 @@ export const UIActions = {
 
   [types.setCreateProjectMessage]: message => ({type: types.setCreateProjectMessage, message}),
 
-  [types.selectOverviewView]: view => ({type: types.selectOverviewView, view}),
+  [types.selectOverviewPerspective]: view => ({type: types.selectOverviewPerspective, view}),
 
   [types.selectOverviewItem]: uid => ({type: types.selectOverviewItem, uid}),
 

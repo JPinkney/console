@@ -19,6 +19,7 @@ import {
 import {
   OverviewGroup,
   OverviewItem,
+  OverviewMetrics,
   PodControllerOverviewItem,
 } from '.';
 
@@ -203,17 +204,17 @@ const Alerts: React.SFC<AlertsProps> = ({item}) => {
   </div>;
 };
 
-const projectOverviewListItemStateToProps = ({UI}): ProjectOverviewListItemPropsFromState => ({
+const projectOverviewListItemStateToProps = ({UI}): WorkloadsOverviewListItemPropsFromState => ({
   selectedUID: UI.getIn(['overview', 'selectedUID']),
 });
 
-const projectOverviewListItemDispatchToProps = (dispatch): ProjectOverviewListItemPropsFromDispatch => ({
+const projectOverviewListItemDispatchToProps = (dispatch): WorkloadsOverviewListItemPropsFromDispatch => ({
   selectItem: (uid) => dispatch(UIActions.selectOverviewItem(uid)),
   dismissDetails: () => dispatch(UIActions.dismissOverviewDetails()),
 });
 
-const ProjectOverviewListItem = connect<ProjectOverviewListItemPropsFromState, ProjectOverviewListItemPropsFromDispatch, ProjectOverviewListItemOwnProps>(projectOverviewListItemStateToProps, projectOverviewListItemDispatchToProps)(
-  ({dismissDetails, item, metrics, selectItem, selectedUID}: ProjectOverviewListItemProps) => {
+const WorkloadsOverviewListItem = connect<WorkloadsOverviewListItemPropsFromState, WorkloadsOverviewListItemPropsFromDispatch, WorkloadsOverviewListItemOwnProps>(projectOverviewListItemStateToProps, projectOverviewListItemDispatchToProps)(
+  ({dismissDetails, item, metrics, selectItem, selectedUID}: WorkloadsOverviewListItemProps) => {
     const {current, obj} = item;
     const {namespace, name, uid} = obj.metadata;
     const {kind} = obj;
@@ -260,9 +261,9 @@ const ProjectOverviewListItem = connect<ProjectOverviewListItemPropsFromState, P
   }
 );
 
-const ProjectOverviewList: React.SFC<ProjectOverviewListProps> = ({items, metrics}) => {
+const WorkloadsOverviewList: React.SFC<WorkloadsOverviewListProps> = ({items, metrics}) => {
   const listItems = _.map(items, (item) =>
-    <ProjectOverviewListItem
+    <WorkloadsOverviewListItem
       item={item}
       key={item.obj.metadata.uid}
       metrics={metrics}
@@ -273,19 +274,19 @@ const ProjectOverviewList: React.SFC<ProjectOverviewListProps> = ({items, metric
   </ListView>;
 };
 
-const ProjectOverviewGroup: React.SFC<ProjectOverviewGroupProps> = ({heading, items, metrics}) =>
+const WorkloadsOverviewGroup: React.SFC<WorkloadsOverviewGroupProps> = ({heading, items, metrics}) =>
   <div className="project-overview__group">
     <h2 className="project-overview__group-heading">{heading}</h2>
-    <ProjectOverviewList
+    <WorkloadsOverviewList
       items={items}
       metrics={metrics}
     />
   </div>;
 
-export const ProjectOverview: React.SFC<ProjectOverviewProps> = ({groups, metrics}) =>
+export const WorkloadsOverview: React.SFC<WorkloadsOverviewProps> = ({groups, metrics}) =>
   <div className="project-overview">
     {_.map(groups, ({name, items}, index) =>
-      <ProjectOverviewGroup
+      <WorkloadsOverviewGroup
         key={name || `_${index}`}
         heading={name}
         items={items}
@@ -312,7 +313,7 @@ type MetricsTooltipProps = {
 };
 
 type MetricsProps = {
-  metrics: any;
+  metrics: OverviewMetrics;
   item: OverviewItem;
 };
 
@@ -324,34 +325,34 @@ type AlertsProps = {
   item: OverviewItem;
 };
 
-type ProjectOverviewListItemPropsFromState = {
+type WorkloadsOverviewListItemPropsFromState = {
   selectedUID: string;
 };
 
-type ProjectOverviewListItemPropsFromDispatch = {
+type WorkloadsOverviewListItemPropsFromDispatch = {
   selectItem: (uid: string) => void;
   dismissDetails: () => void;
 };
 
-type ProjectOverviewListItemOwnProps= {
+type WorkloadsOverviewListItemOwnProps = {
   item: OverviewItem;
-  metrics: any;
+  metrics: OverviewMetrics;
 };
 
-type ProjectOverviewListItemProps = ProjectOverviewListItemOwnProps & ProjectOverviewListItemPropsFromDispatch & ProjectOverviewListItemPropsFromState;
+type WorkloadsOverviewListItemProps = WorkloadsOverviewListItemOwnProps & WorkloadsOverviewListItemPropsFromDispatch & WorkloadsOverviewListItemPropsFromState;
 
-type ProjectOverviewListProps = {
+type WorkloadsOverviewListProps = {
   items: OverviewItem[];
   metrics: any;
 };
 
-type ProjectOverviewGroupProps = {
+type WorkloadsOverviewGroupProps = {
   heading: string;
   items: OverviewItem[];
   metrics: any;
 };
 
-type ProjectOverviewProps = {
+type WorkloadsOverviewProps = {
   groups: OverviewGroup[];
   metrics: any;
 };

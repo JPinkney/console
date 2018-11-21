@@ -20,7 +20,6 @@ export default (state, action) => {
       }
     }
 
-
     return ImmutableMap({
       activeNavSectionId: 'workloads',
       location: pathname,
@@ -30,6 +29,7 @@ export default (state, action) => {
         resources: new ImmutableMap({}),
         selectedDetailsTab: '',
         selectedUID: '',
+        selectedPerspective: 'workloads',
       }),
     });
   }
@@ -88,8 +88,8 @@ export default (state, action) => {
       }
       return state;
 
-    case types.selectOverviewView:
-      return state.setIn(['overview', 'selectedView'], action.view);
+    case types.selectOverviewPerspective:
+      return state.setIn(['overview', 'selectedPerspective'], action.view);
 
     case types.selectOverviewItem:
       return state.setIn(['overview', 'selectedUID'], action.uid);
