@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { connect } from 'react-redux';
 import * as _ from 'lodash-es';
 import { Link } from 'react-router-dom';
 import * as okdLogoImg from '../imgs/okd-logo.svg';
@@ -13,9 +14,26 @@ import { authSvc } from '../module/auth';
 import { ActionsMenu, AsyncComponent } from './utils';
 import { openshiftHelpBase } from './utils/documentation';
 import { createModalLauncher } from './factory/modal';
+import { usernameStateToProps } from '../ui/ui-reducers';
 
-import { coFetchJSON } from '../co-fetch';
 import { SafetyFirst } from './safety-first';
+
+/* eslint-disable no-undef */
+export type FlagsProps = {
+  flags: {[name: string]: boolean},
+};
+
+export type Actions = { label: string, href?: string, callback?: any }[];
+
+export type UserMenuProps = {
+  actions: Actions,
+  username: any,
+};
+
+export type OSUserMenuProps = {
+  actions: Actions,
+  username?: any,
+};
 
 const AboutModal = (props) => <AsyncComponent loader={() => import('./utils/about-modal').then(c => c.AboutModal)} {...props} />;
 
@@ -99,6 +117,14 @@ const UserMenu: React.StatelessComponent<UserMenuProps> = ({username, actions}) 
     buttonClassName="btn-link nav-item-iconic" />;
 };
 
+class OSUserMenu_ extends SafetyFirst<OSUserMenuProps, {}> {
+  render() {
+    return this.props.username ? <UserMenu actions={this.props.actions} username={this.props.username} /> : null;
+  }
+}
+
+const OSUserMenu = connect(usernameStateToProps)(OSUserMenu_ as any as React.SFC<OSUserMenuProps>);
+
 const UserMenuWrapper = connectToFlags(FLAGS.AUTH_ENABLED, FLAGS.OPENSHIFT)((props: FlagsProps) => {
   if (flagPending(props.flags[FLAGS.OPENSHIFT]) || flagPending(props.flags[FLAGS.AUTH_ENABLED])) {
     return null;
@@ -126,32 +152,6 @@ const UserMenuWrapper = connectToFlags(FLAGS.AUTH_ENABLED, FLAGS.OPENSHIFT)((pro
 
   return authSvc.userID() ? <UserMenu actions={actions} username={authSvc.name()} /> : null;
 });
-
-export class OSUserMenu extends SafetyFirst<OSUserMenuProps, OSUserMenuState> {
-  constructor(props) {
-    super(props);
-    this.state = {
-      username: undefined,
-    };
-  }
-
-  componentDidMount() {
-    super.componentDidMount();
-    this.getUserInfo();
-  }
-
-  private getUserInfo() {
-    coFetchJSON('api/kubernetes/apis/user.openshift.io/v1/users/~')
-      .then((user) => {
-        this.setState({ username: _.get(user, 'fullName') || user.metadata.name });
-      }).catch(() => this.setState({ username: null }));
-  }
-
-  render() {
-    const username = this.state.username;
-    return username ? <UserMenu actions={this.props.actions} username={username} /> : null;
-  }
-}
 
 export const LogoImage = () => {
   const details = getBrandingDetails();
@@ -182,23 +182,3 @@ const Masthead_ = ({ flags }) => <header role="banner" className="navbar navbar-
   </div>
 </header>;
 export const Masthead = connectToFlags(FLAGS.CLUSTER_UPDATES_AVAILABLE)(Masthead_);
-
-/* eslint-disable no-undef */
-export type FlagsProps = {
-  flags: {[name: string]: boolean},
-};
-
-export type Actions = { label: string, href?: string, callback?: any }[];
-
-export type UserMenuProps = {
-  actions: Actions,
-  username: any,
-};
-
-export type OSUserMenuProps = {
-  actions: Actions,
-};
-
-export type OSUserMenuState = {
-  username: string,
-};

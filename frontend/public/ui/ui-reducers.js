@@ -20,7 +20,6 @@ export default (state, action) => {
       }
     }
 
-
     return ImmutableMap({
       activeNavSectionId: 'workloads',
       location: pathname,
@@ -33,6 +32,7 @@ export default (state, action) => {
         selectedUID: '',
         selectedView: 'resources',
       }),
+      username: '',
     });
   }
 
@@ -64,6 +64,9 @@ export default (state, action) => {
 
     case types.setCreateProjectMessage:
       return state.set('createProjectMessage', action.message);
+
+    case types.setUsername:
+      return state.set('username', action.username);
 
     case types.setMonitoringData:
       state = state.setIn(['monitoring', action.key], action.data);
@@ -124,4 +127,8 @@ export default (state, action) => {
 
 export const createProjectMessageStateToProps = ({UI}) => {
   return {createProjectMessage: UI.get('createProjectMessage')};
+};
+
+export const usernameStateToProps = ({UI}) => {
+  return {username: UI.get('username')};
 };
