@@ -26,5 +26,5 @@ export const NAMESPACE_LOCAL_STORAGE_KEY = 'dropdown-storage-namespaces';
 export const LAST_NAMESPACE_NAME_LOCAL_STORAGE_KEY = `${STORAGE_PREFIX}/last-namespace-name`;
 export const API_DISCOVERY_RESOURCES_LOCAL_STORAGE_KEY = `${STORAGE_PREFIX}/api-discovery-resources`;
 
-// Temporary cluster admin user
-export const TEMPORARY_ADMIN = 'kube-admin';
+// Bootstrap user for OpenShift 4.0 clusters
+export const KUBE_ADMIN_USERNAME = 'kube:admin';

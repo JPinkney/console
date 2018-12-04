@@ -99,7 +99,7 @@ const UserMenu: React.StatelessComponent<UserMenuProps> = ({username, actions}) 
 };
 
 const OSUserMenu_: React.StatelessComponent<OSUserMenuProps> = ({user, actions}) => {
-  const username = _.get(user, 'fullName') || user.metadata.name;
+  const username = _.get(user, 'fullName') || _.get(user, 'metadata.name');
   return username ? <UserMenu actions={actions} username={username} /> : null;
 };
 

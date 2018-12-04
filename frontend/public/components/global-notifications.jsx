@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import { ImpersonateNotifier } from './impersonate-notifier';
-import { TemporaryAdminNotifier } from './temporary-admin-notifier';
+import { KubeAdminNotifier } from './kube-admin-notifier';
 
 export const GlobalNotifications = () => <div className="co-global-notifications">
+  <KubeAdminNotifier />
   <ImpersonateNotifier />
-  <TemporaryAdminNotifier />
 </div>;
