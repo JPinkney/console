@@ -32,7 +32,7 @@ export default (state, action) => {
         selectedUID: '',
         selectedView: 'resources',
       }),
-      username: '',
+      user: {},
     });
   }
 
@@ -65,8 +65,8 @@ export default (state, action) => {
     case types.setCreateProjectMessage:
       return state.set('createProjectMessage', action.message);
 
-    case types.setUsername:
-      return state.set('username', action.username);
+    case types.setUser:
+      return state.set('user', action.user);
 
     case types.setMonitoringData:
       state = state.setIn(['monitoring', action.key], action.data);
@@ -129,6 +129,6 @@ export const createProjectMessageStateToProps = ({UI}) => {
   return {createProjectMessage: UI.get('createProjectMessage')};
 };
 
-export const usernameStateToProps = ({UI}) => {
-  return {username: UI.get('username')};
+export const userStateToProps = ({UI}) => {
+  return {user: UI.get('user')};
 };

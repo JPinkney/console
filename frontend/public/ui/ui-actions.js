@@ -73,7 +73,7 @@ export const types = {
   setCreateProjectMessage: 'setCreateProjectMessage',
   setCurrentLocation: 'setCurrentLocation',
   setMonitoringData: 'setMonitoringData',
-  setUsername: 'setUsername',
+  setUser: 'setUser',
   sortList: 'sortList',
   startImpersonate: 'startImpersonate',
   stopImpersonate: 'stopImpersonate',
@@ -164,7 +164,7 @@ export const UIActions = {
 
   [types.setCreateProjectMessage]: message => ({type: types.setCreateProjectMessage, message}),
 
-  [types.setUsername]: username => ({type: types.setUsername, username}),
+  [types.setUser]: user => ({type: types.setUser, user}),
 
   [types.selectOverviewView]: view => ({type: types.selectOverviewView, view}),
 

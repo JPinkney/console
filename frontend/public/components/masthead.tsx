@@ -14,26 +14,7 @@ import { authSvc } from '../module/auth';
 import { ActionsMenu, AsyncComponent } from './utils';
 import { openshiftHelpBase } from './utils/documentation';
 import { createModalLauncher } from './factory/modal';
-import { usernameStateToProps } from '../ui/ui-reducers';
-
-import { SafetyFirst } from './safety-first';
-
-/* eslint-disable no-undef */
-export type FlagsProps = {
-  flags: {[name: string]: boolean},
-};
-
-export type Actions = { label: string, href?: string, callback?: any }[];
-
-export type UserMenuProps = {
-  actions: Actions,
-  username: any,
-};
-
-export type OSUserMenuProps = {
-  actions: Actions,
-  username?: any,
-};
+import { userStateToProps } from '../ui/ui-reducers';
 
 const AboutModal = (props) => <AsyncComponent loader={() => import('./utils/about-modal').then(c => c.AboutModal)} {...props} />;
 
@@ -117,13 +98,12 @@ const UserMenu: React.StatelessComponent<UserMenuProps> = ({username, actions}) 
     buttonClassName="btn-link nav-item-iconic" />;
 };
 
-class OSUserMenu_ extends SafetyFirst<OSUserMenuProps, {}> {
-  render() {
-    return this.props.username ? <UserMenu actions={this.props.actions} username={this.props.username} /> : null;
-  }
-}
+const OSUserMenu_: React.StatelessComponent<OSUserMenuProps> = ({user, actions}) => {
+  const username = _.get(user, 'fullName') || user.metadata.name;
+  return username ? <UserMenu actions={actions} username={username} /> : null;
+};
 
-const OSUserMenu = connect(usernameStateToProps)(OSUserMenu_ as any as React.SFC<OSUserMenuProps>);
+const OSUserMenu = connect(userStateToProps)(OSUserMenu_);
 
 const UserMenuWrapper = connectToFlags(FLAGS.AUTH_ENABLED, FLAGS.OPENSHIFT)((props: FlagsProps) => {
   if (flagPending(props.flags[FLAGS.OPENSHIFT]) || flagPending(props.flags[FLAGS.AUTH_ENABLED])) {
@@ -182,3 +162,20 @@ const Masthead_ = ({ flags }) => <header role="banner" className="navbar navbar-
   </div>
 </header>;
 export const Masthead = connectToFlags(FLAGS.CLUSTER_UPDATES_AVAILABLE)(Masthead_);
+
+/* eslint-disable no-undef */
+export type FlagsProps = {
+  flags: {[name: string]: boolean},
+};
+
+export type Actions = { label: string, href?: string, callback?: any }[];
+
+export type UserMenuProps = {
+  actions: Actions,
+  username: any,
+};
+
+export type OSUserMenuProps = {
+  actions: Actions,
+  user?: any,
+};

@@ -155,14 +155,14 @@ const detectMonitoringURLs = dispatch => coFetchJSON(monitoringConfigMapPath)
     },
   );
 
-const detectUsername = dispatch => coFetchJSON('api/kubernetes/apis/user.openshift.io/v1/users/~')
+const detectUser = dispatch => coFetchJSON('api/kubernetes/apis/user.openshift.io/v1/users/~')
   .then(
     (user) => {
-      dispatch(UIActions.setUsername(_.get(user, 'fullName') || user.metadata.name));
+      dispatch(UIActions.setUser(user));
     },
     err => {
       if (!_.includes([401, 403, 404, 500], _.get(err, 'response.status'))) {
-        setTimeout(() => detectUsername(dispatch), 15000);
+        setTimeout(() => detectUser(dispatch), 15000);
       }
     },
   );
@@ -172,7 +172,7 @@ export const featureActions = [
   detectCanCreateProject,
   detectMonitoringURLs,
   detectClusterVersion,
-  detectUsername,
+  detectUser,
 ];
 
 const projectListPath = `${k8sBasePath}/apis/project.openshift.io/v1/projects?limit=1`;
