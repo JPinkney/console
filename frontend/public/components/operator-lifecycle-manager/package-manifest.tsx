@@ -62,7 +62,7 @@ export const PackageManifestList = requireOperatorGroup((props: PackageManifestL
     label={PackageManifestModel.labelPlural}
     data={props.data}
     EmptyMsg={() => <MsgBox title="No Package Manifests Found" detail="Package Manifests are packaged Operators which can be subscribed to for automatic upgrades." />}>
-    { [...catalogs.values()].map(catalog => <div key={catalog.name} className="co-catalogsource-list__section">
+    { _.sortBy([...catalogs.values()], 'displayName').map(catalog => <div key={catalog.name} className="co-catalogsource-list__section">
       <div className="co-catalogsource-list__section__packages">
         <div>
           <h3>{catalog.displayName}</h3>
