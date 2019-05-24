@@ -9,9 +9,19 @@ export const sidebarScrollTop = () => {
 export class ResourceSidebarWrapper extends React.Component {
   constructor(props) {
     super(props);
+    this.toggleSidebar = this.toggleSidebar.bind(this);
     this.state = {
       showSidebar: true,
     };
+  }
+
+  toggleSidebar() {
+    this.setState(state => {
+      setTimeout(() => {
+        window.dispatchEvent(new Event('sidebar_toggle'));
+      }, 100);
+      return {showSidebar: !state.showSidebar};
+    });
   }
 
   render() {
