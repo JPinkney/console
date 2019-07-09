@@ -13,6 +13,10 @@ import { ExploreTypeSidebar } from './sidebars/explore-type-sidebar';
 import { ResourceSidebar } from './sidebars/resource-sidebar';
 import { yamlTemplates } from '../models/yaml-templates';
 
+import { getLanguageService, TextDocument, SchemaRequestService, CustomFormatterOptions } from "yaml-language-server";
+import { MonacoToProtocolConverter, ProtocolToMonacoConverter } from 'monaco-languageclient/lib/monaco-converter';
+import * as URL from 'url';
+
 const generateObjToLoad = (kind, templateName, namespace = 'default') => {
   const sampleObj = safeLoad(yamlTemplates.getIn([kind, templateName]));
   if (_.has(sampleObj.metadata, 'namespace')) {
@@ -118,9 +122,10 @@ export const EditYAML = connect(stateToProps)(
       }
     }
 
-    editorDidMount(editor) {
+    editorDidMount(editor, monaco) {
       editor.layout();
       editor.focus();
+      this.loadMonacoYAML(monaco); 
     }
 
     get height() {
@@ -297,7 +302,144 @@ export const EditYAML = connect(stateToProps)(
       this.download(data);
     }
 
-    render() {
+  loadMonacoYAML(monaco) {
+    const LANGUAGE_ID = 'yaml';
+    const MODEL_URI = 'inmemory://model.yaml'
+    const MONACO_URI = monaco.Uri.parse(MODEL_URI);
+    
+    // register the YAML language with Monaco
+    monaco.languages.register({
+        id: LANGUAGE_ID,
+        extensions: ['.yml', '.yaml'],
+        aliases: ['YAML', 'yaml'],
+        mimetypes: ['application/yaml']
+    });
+
+    function getModel() {
+        // Fixme
+        // return monaco.editor.getModel(MONACO_URI);
+        return monaco.editor.getModels()[0];
+    }
+    
+    function createDocument(model) {
+        return TextDocument.create(MODEL_URI, model.getModeId(), model.getVersionId(), model.getValue());
+    }
+    
+    var resolveSchema = function (url) {
+        const promise = new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = () => resolve(xhr.responseText);
+            xhr.onerror = () => reject(xhr.statusText);
+            xhr.open("GET", url, true);
+            xhr.send();
+            console.log('resolving schema ' + url);
+        });
+        return promise;
+    }
+    const workspaceContext = {
+      resolveRelativePath: (relativePath, resource) =>
+          URL.resolve(resource, relativePath)
+    };
+    
+    const m2p = new MonacoToProtocolConverter();
+    const p2m = new ProtocolToMonacoConverter();
+    const yamlService = getLanguageService( resolveSchema, workspaceContext, []);
+    const schemas = [{
+      uri:  'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
+      fileMatch: [ "*"]
+    }];
+    yamlService.configure({
+      validate: true,
+      schemas: schemas,
+      hover: true,
+      completion: true
+    });
+    
+    const pendingValidationRequests = new Map();
+    
+    monaco.languages.registerCompletionItemProvider(LANGUAGE_ID, {
+        provideCompletionItems(model, position, token) {
+            const document = createDocument(model);
+            return yamlService.doComplete(document, m2p.asPosition(position.lineNumber, position.column), true).then((list) => {
+                return p2m.asCompletionResult(list);
+            });
+        },
+    
+        resolveCompletionItem(item, token) {
+            return yamlService.doResolve(m2p.asCompletionItem(item)).then(result => p2m.asCompletionItem(result));
+        }
+    });
+    
+    monaco.languages.registerDocumentFormattingEditProvider(LANGUAGE_ID, {
+      provideDocumentFormattingEdits(model,options,token) {
+        const document = createDocument(model);
+        let yamlFormatterSettings = {
+          singleQuote: false,
+          bracketSpacing: true,
+          proseWrap: 'preserve',
+          printWidth: 80,
+          enable: true
+      };
+        const edits = yamlService.doFormat(document, yamlFormatterSettings);
+        return p2m.asTextEdits(edits);
+      }
+    
+    });
+    
+    monaco.languages.registerDocumentSymbolProvider(LANGUAGE_ID, {
+        provideDocumentSymbols(model, token) {
+            const document = createDocument(model);
+            return p2m.asSymbolInformations(yamlService.findDocumentSymbols(document));
+        }
+    });
+    
+    monaco.languages.registerHoverProvider(LANGUAGE_ID, {
+        provideHover(model, position, token){
+            const document = createDocument(model);
+            return yamlService.doHover( document, m2p.asPosition(position.lineNumber, position.column)).then((hover) => {
+                return p2m.asHover(hover);
+            });
+        }
+    });
+    
+    getModel().onDidChangeContent((event) => {
+        validate();
+    });
+    
+    function validate() {
+        const document = createDocument(getModel());
+        cleanPendingValidation(document);
+        pendingValidationRequests.set(document.uri, setTimeout(() => {
+            pendingValidationRequests.delete(document.uri);
+            doValidate(document);
+        }));
+    }
+    
+    function cleanPendingValidation(document) {
+        const request = pendingValidationRequests.get(document.uri);
+        if (request !== undefined) {
+            clearTimeout(request);
+            pendingValidationRequests.delete(document.uri);
+        }
+    }
+    
+    function doValidate(document) {
+        if (document.getText().length === 0) {
+            cleanDiagnostics();
+            return;
+        }
+        yamlService.doValidation( document, true).then((diagnostics) => {
+            const markers = p2m.asDiagnostics(diagnostics);
+            monaco.editor.setModelMarkers(getModel(), 'default', markers);
+        });
+    }
+    
+    function cleanDiagnostics() {
+        monaco.editor.setModelMarkers(monaco.editor.getModel(MONACO_URI), 'default', []);
+    }
+  }
+
+  render() {
       if (!this.props.create && !this.props.obj) {
         return <Loading />;
       }
@@ -308,7 +450,7 @@ export const EditYAML = connect(stateToProps)(
       const {error, success, stale, yaml, height} = this.state;
       const {create, obj, download = true, header} = this.props;
       const readOnly = this.props.readOnly || this.state.notAllowed;
-      const options = { readOnly };
+      const options = { readOnly, fixedOverflowWidgets: true };
       const model = this.getModel(obj);
       const editYamlComponent = <div className="co-file-dropzone">
         { canDrop && <div className={klass}><p className="co-file-dropzone__drop-text">Drop file here</p></div> }
@@ -361,3 +503,4 @@ export const EditYAML = connect(stateToProps)(
     }
   }
 );
+
