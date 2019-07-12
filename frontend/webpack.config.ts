@@ -130,7 +130,7 @@ const config: webpack.Configuration = {
     }),
     extractCSS,
   ],
-  devtool: 'cheap-module-source-map',
+  devtool: 'source-map',
   stats: 'minimal',
 };
 

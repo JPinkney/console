@@ -12,23 +12,24 @@ import { checkAccess, history, Loading, resourceObjPath } from './utils';
 import { ExploreTypeSidebar } from './sidebars/explore-type-sidebar';
 import { ResourceSidebar } from './sidebars/resource-sidebar';
 import { yamlTemplates } from '../models/yaml-templates';
+import { getStoredSwagger } from '../module/k8s/swagger';
 
 import { getLanguageService, TextDocument, SchemaRequestService, CustomFormatterOptions } from "yaml-language-server";
 import { MonacoToProtocolConverter, ProtocolToMonacoConverter } from 'monaco-languageclient/lib/monaco-converter';
 import * as URL from 'url';
 
 const generateObjToLoad = (kind, templateName, namespace = 'default') => {
-  const sampleObj = safeLoad(yamlTemplates.getIn([kind, templateName]));
-  if (_.has(sampleObj.metadata, 'namespace')) {
-    sampleObj.metadata.namespace = namespace;
-  }
-  return sampleObj;
+    const sampleObj = safeLoad(yamlTemplates.getIn([kind, templateName]));
+    if (_.has(sampleObj.metadata, 'namespace')) {
+        sampleObj.metadata.namespace = namespace;
+    }
+    return sampleObj;
 };
 
-const stateToProps = ({k8s, UI}) => ({
-  activeNamespace: UI.get('activeNamespace'),
-  impersonate: UI.get('impersonate'),
-  models: k8s.getIn(['RESOURCES', 'models']),
+const stateToProps = ({ k8s, UI }) => ({
+    activeNamespace: UI.get('activeNamespace'),
+    impersonate: UI.get('impersonate'),
+    models: k8s.getIn(['RESOURCES', 'models']),
 });
 
 /**
@@ -37,470 +38,519 @@ const stateToProps = ({k8s, UI}) => ({
  */
 /** @augments {React.Component<{obj?: any, create: boolean, kind: string, redirectURL?: string}>} */
 export const EditYAML = connect(stateToProps)(
-  class EditYAML extends React.Component {
-    constructor(props) {
-      super(props);
-      this.state = {
-        error: null,
-        success: null,
-        height: 500,
-        initialized: false,
-        stale: false,
-        sampleObj: props.sampleObj,
-        fileUpload: props.fileUpload,
-      };
-      this.monacoRef = React.createRef();
-      this.resize_ = () => {
-        this.setState({height: this.height});
-        this.monacoRef.current.editor.layout();
-      };
-      // k8s uses strings for resource versions
-      this.displayedVersion = '0';
-      // Default cancel action is browser back navigation
-      this.onCancel = 'onCancel' in props ? props.onCancel : history.goBack;
-      this.loadSampleYaml_ = this.loadSampleYaml_.bind(this);
-      this.downloadSampleYaml_ = this.downloadSampleYaml_.bind(this);
-      this.editorDidMount = this.editorDidMount.bind(this);
+    class EditYAML extends React.Component {
+        constructor(props) {
+            super(props);
+            this.state = {
+                error: null,
+                success: null,
+                height: 500,
+                initialized: false,
+                stale: false,
+                sampleObj: props.sampleObj,
+                fileUpload: props.fileUpload,
+                isCRDLoaded: false,
+                crdItems: []
+            };
+            this.monacoRef = React.createRef();
+            this.resize_ = () => {
+                this.setState({ height: this.height });
+                this.monacoRef.current.editor.layout();
+            };
+            // k8s uses strings for resource versions
+            this.displayedVersion = '0';
+            // Default cancel action is browser back navigation
+            this.onCancel = 'onCancel' in props ? props.onCancel : history.goBack;
+            this.loadSampleYaml_ = this.loadSampleYaml_.bind(this);
+            this.downloadSampleYaml_ = this.downloadSampleYaml_.bind(this);
+            this.editorDidMount = this.editorDidMount.bind(this);
 
-      if (this.props.error) {
-        this.handleError(this.props.error);
-      }
-    }
-
-    getModel(obj) {
-      if (_.isEmpty(obj)) {
-        return null;
-      }
-      const { models } = this.props;
-      return models.get(referenceFor(obj)) || models.get(obj.kind);
-    }
-
-    handleError(error) {
-      this.setState({error, success: null}, () => {
-        this.resize_();
-      });
-    }
-
-    componentDidUpdate(prevProps, prevState) {
-      if (!_.isEqual(prevState, this.state)) {
-        this.resize_();
-      }
-    }
-
-    componentDidMount() {
-      this.loadYaml();
-      window.addEventListener('resize', this.resize_);
-      window.addEventListener('nav_toggle', this.resize_);
-      window.addEventListener('sidebar_toggle', this.resize_);
-    }
-
-    componentWillUnmount() {
-      window.removeEventListener('resize', this.resize_);
-      window.removeEventListener('nav_toggle', this.resize_);
-      window.removeEventListener('sidebar_toggle', this.resize_);
-    }
-
-    componentWillReceiveProps(nextProps) {
-      if (nextProps.isOver) {
-        return;
-      }
-      const newVersion = _.get(nextProps.obj, 'metadata.resourceVersion');
-      const stale = this.displayedVersion !== newVersion;
-      this.setState({stale});
-      if (nextProps.error) {
-        this.handleError(nextProps.error);
-      } else if (this.state.error) {
-        //clear stale error state
-        this.setState({error: ''});
-      }
-      if (nextProps.sampleObj) {
-        this.loadYaml(!_.isEqual(this.state.sampleObj, nextProps.sampleObj), nextProps.sampleObj);
-      } else if (nextProps.fileUpload) {
-        this.loadYaml(!_.isEqual(this.state.fileUpload, nextProps.fileUpload), nextProps.fileUpload);
-      } else {
-        this.loadYaml();
-      }
-    }
-
-    editorDidMount(editor, monaco) {
-      editor.layout();
-      editor.focus();
-      this.loadMonacoYAML(monaco); 
-    }
-
-    get height() {
-      return Math.floor(
-        // notifications can appear above and below .pf-c-page, so calculate height using the bottom of .pf-c-page
-        document.getElementsByClassName('pf-c-page')[0].getBoundingClientRect().bottom - this.editor.getBoundingClientRect().top - this.buttons.getBoundingClientRect().height
-      );
-    }
-
-    reload() {
-      this.loadYaml(true);
-      this.setState({
-        sampleObj: null,
-        error: null,
-        success: null,
-      });
-    }
-
-    checkEditAccess(obj) {
-      const { readOnly, impersonate } = this.props;
-      if (readOnly) {
-        // We're already read-only. No need for the access review.
-        return;
-      }
-
-      const model = this.getModel(obj);
-      if (!model) {
-        return;
-      }
-
-      const { name, namespace } = obj.metadata;
-      const resourceAttributes = {
-        group: model.apiGroup,
-        resource: model.plural,
-        verb: 'update',
-        name,
-        namespace,
-      };
-      checkAccess(resourceAttributes, impersonate).then(resp => {
-        this.setState({notAllowed: !resp.status.allowed});
-      });
-    }
-
-    loadYaml(reload = false, obj = this.props.obj, readOnly = this.props.readOnly) {
-      if (this.state.initialized && !reload) {
-        return;
-      }
-
-      let yaml = '';
-      if (obj) {
-        if (_.isString(obj)) {
-          yaml = obj;
-        } else {
-          try {
-            yaml = safeDump(obj);
-            this.checkEditAccess(obj);
-          } catch (e) {
-            yaml = `Error getting YAML: ${e}`;
-          }
-        }
-      }
-
-      this.displayedVersion = _.get(obj, 'metadata.resourceVersion');
-      this.setState({yaml, initialized: true, stale: false});
-      this.resize_();
-    }
-
-    getEditor() {
-      return this.monacoRef.current.editor;
-    }
-
-    save() {
-      let obj;
-      try {
-        obj = safeLoad(this.getEditor().getValue());
-      } catch (e) {
-        this.handleError(`Error parsing YAML: ${e}`);
-        return;
-      }
-
-      if (!obj.apiVersion) {
-        this.handleError('No "apiVersion" field found in YAML.');
-        return;
-      }
-
-      if (!obj.kind) {
-        this.handleError('No "kind" field found in YAML.');
-        return;
-      }
-
-      const model = this.getModel(obj);
-      if (!model) {
-        this.handleError(`The server doesn't have a resource type "kind: ${obj.kind}, apiVersion: ${obj.apiVersion}".`);
-        return;
-      }
-
-      // If this is a namesapced resource, default to the active namespace when none is specified in the YAML.
-      if (!obj.metadata.namespace && model.namespaced) {
-        obj.metadata.namespace = this.props.activeNamespace;
-      }
-
-      const { namespace: newNamespace, name: newName } = obj.metadata;
-
-      if (!this.props.create && this.props.obj) {
-        const { namespace, name } = this.props.obj.metadata;
-
-        if (name !== newName) {
-          this.handleError(`Cannot change resource name (original: "${name}", updated: "${newName}").`);
-          return;
-        }
-        if (namespace !== newNamespace) {
-          this.handleError(`Cannot change resource namespace (original: "${namespace}", updated: "${newNamespace}").`);
-          return;
-        }
-        if (this.props.obj.kind !== obj.kind) {
-          this.handleError(`Cannot change resource kind (original: "${this.props.obj.kind}", updated: "${obj.kind}").`);
-          return;
-        }
-
-        const apiGroup = groupVersionFor(this.props.obj.apiVersion).group;
-        const newAPIGroup = groupVersionFor(obj.apiVersion).group;
-        if (apiGroup !== newAPIGroup) {
-          this.handleError(`Cannot change API group (original: "${apiGroup}", updated: "${newAPIGroup}").`);
-          return;
-        }
-      }
-
-      this.setState({success: null, error: null}, () => {
-        let action = k8sUpdate;
-        let redirect = false;
-        if (this.props.create) {
-          action = k8sCreate;
-          delete obj.metadata.resourceVersion;
-          redirect = true;
-        }
-        action(model, obj, newNamespace, newName)
-          .then(o => {
-            if (redirect) {
-              history.push(this.props.redirectURL || resourceObjPath(o, referenceFor(o)));
-              // TODO: (ggreer). show message on new page. maybe delete old obj?
-              return;
+            if (this.props.error) {
+                this.handleError(this.props.error);
             }
-            const success = `${newName} has been updated to version ${o.metadata.resourceVersion}`;
-            this.setState({success, error: null});
-            this.loadYaml(true, o);
+        }
+
+        getModel(obj) {
+            if (_.isEmpty(obj)) {
+                return null;
+            }
+            const { models } = this.props;
+            return models.get(referenceFor(obj)) || models.get(obj.kind);
+        }
+
+        handleError(error) {
+            this.setState({ error, success: null }, () => {
+                this.resize_();
+            });
+        }
+
+        componentDidUpdate(prevProps, prevState) {
+            if (!_.isEqual(prevState, this.state)) {
+                this.resize_();
+
+                // Inject the new YAML into the YAML Service
+                console.log('injecting the YAML');
+                console.log(this.state);
+                console.log(this.state.crdItems);
+
+                // const schemas = [
+                //   {
+                //     uri:  'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
+                //     fileMatch: ["*"]
+                //   }
+                // ];
+                // for (const c of this.state.crdItems) {
+                //   const s = {
+                //     uri: 'http://google.com',
+                //     fileMatch: ['*'],
+                //     schema: this.resolveCustomResourceDefinition(c)
+                //   }
+                //   schemas.push(s);
+                // }
+
+                // if (this.yamlService) {
+                //   this.yamlService.configure({
+                //     validate: true,
+                //     schemas: schemas,
+                //     hover: true,
+                //     completion: true
+                //   });
+                // }
+            }
+        }
+
+        componentDidMount() {
+            this.loadYaml();
+            window.addEventListener('resize', this.resize_);
+            window.addEventListener('nav_toggle', this.resize_);
+            window.addEventListener('sidebar_toggle', this.resize_);
+        }
+
+        componentWillUnmount() {
+            window.removeEventListener('resize', this.resize_);
+            window.removeEventListener('nav_toggle', this.resize_);
+            window.removeEventListener('sidebar_toggle', this.resize_);
+        }
+
+        componentWillReceiveProps(nextProps) {
+            if (nextProps.isOver) {
+                return;
+            }
+            const newVersion = _.get(nextProps.obj, 'metadata.resourceVersion');
+            const stale = this.displayedVersion !== newVersion;
+            this.setState({ stale });
+            if (nextProps.error) {
+                this.handleError(nextProps.error);
+            } else if (this.state.error) {
+                //clear stale error state
+                this.setState({ error: '' });
+            }
+            if (nextProps.sampleObj) {
+                this.loadYaml(!_.isEqual(this.state.sampleObj, nextProps.sampleObj), nextProps.sampleObj);
+            } else if (nextProps.fileUpload) {
+                this.loadYaml(!_.isEqual(this.state.fileUpload, nextProps.fileUpload), nextProps.fileUpload);
+            } else {
+                this.loadYaml();
+            }
+        }
+
+        editorDidMount(editor, monaco) {
+            editor.layout();
+            editor.focus();
+            this.registerYAMLinMonaco(monaco);
+        }
+
+        get height() {
+            return Math.floor(
+                // notifications can appear above and below .pf-c-page, so calculate height using the bottom of .pf-c-page
+                document.getElementsByClassName('pf-c-page')[0].getBoundingClientRect().bottom - this.editor.getBoundingClientRect().top - this.buttons.getBoundingClientRect().height
+            );
+        }
+
+        reload() {
+            this.loadYaml(true);
+            this.setState({
+                sampleObj: null,
+                error: null,
+                success: null,
+            });
+        }
+
+        checkEditAccess(obj) {
+            const { readOnly, impersonate } = this.props;
+            if (readOnly) {
+                // We're already read-only. No need for the access review.
+                return;
+            }
+
+            const model = this.getModel(obj);
+            if (!model) {
+                return;
+            }
+
+            const { name, namespace } = obj.metadata;
+            const resourceAttributes = {
+                group: model.apiGroup,
+                resource: model.plural,
+                verb: 'update',
+                name,
+                namespace,
+            };
+            checkAccess(resourceAttributes, impersonate).then(resp => {
+                this.setState({ notAllowed: !resp.status.allowed });
+            });
+        }
+
+        loadYaml(reload = false, obj = this.props.obj, readOnly = this.props.readOnly) {
+            if (this.state.initialized && !reload) {
+                return;
+            }
+
+            let yaml = '';
+            if (obj) {
+                if (_.isString(obj)) {
+                    yaml = obj;
+                } else {
+                    try {
+                        yaml = safeDump(obj);
+                        this.checkEditAccess(obj);
+                    } catch (e) {
+                        yaml = `Error getting YAML: ${e}`;
+                    }
+                }
+            }
+
+            this.displayedVersion = _.get(obj, 'metadata.resourceVersion');
+            this.setState({ yaml, initialized: true, stale: false });
             this.resize_();
-          })
-          .catch(e => this.handleError(e.message));
-      });
-    }
-
-    download(data = this.getEditor().getValue()) {
-      const blob = new Blob([data], { type: 'text/yaml;charset=utf-8' });
-      let filename = 'k8s-object.yaml';
-      try {
-        const obj = safeLoad(data);
-        if (obj.kind) {
-          filename = `${obj.kind.toLowerCase()}-${obj.metadata.name}.yaml`;
         }
-      } catch (unused) {
-        // unused
-      }
-      saveAs(blob, filename);
-    }
 
-    loadSampleYaml_(templateName = 'default', kind = referenceForModel(this.props.model)) {
-      const sampleObj = generateObjToLoad(kind, templateName, this.props.obj.metadata.namespace);
-      this.setState({sampleObj});
-      this.loadYaml(true, sampleObj);
-    }
-
-    downloadSampleYaml_(templateName = 'default', kind = referenceForModel(this.props.model)) {
-      const data = safeDump(generateObjToLoad(kind, templateName, this.props.obj.metadata.namespace));
-      this.download(data);
-    }
-
-  loadMonacoYAML(monaco) {
-    const LANGUAGE_ID = 'yaml';
-    const MODEL_URI = 'inmemory://model.yaml'
-    const MONACO_URI = monaco.Uri.parse(MODEL_URI);
-    
-    // register the YAML language with Monaco
-    monaco.languages.register({
-        id: LANGUAGE_ID,
-        extensions: ['.yml', '.yaml'],
-        aliases: ['YAML', 'yaml'],
-        mimetypes: ['application/yaml']
-    });
-
-    function getModel() {
-        // Fixme
-        // return monaco.editor.getModel(MONACO_URI);
-        return monaco.editor.getModels()[0];
-    }
-    
-    function createDocument(model) {
-        return TextDocument.create(MODEL_URI, model.getModeId(), model.getVersionId(), model.getValue());
-    }
-    
-    var resolveSchema = function (url) {
-        const promise = new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.onload = () => resolve(xhr.responseText);
-            xhr.onerror = () => reject(xhr.statusText);
-            xhr.open("GET", url, true);
-            xhr.send();
-            console.log('resolving schema ' + url);
-        });
-        return promise;
-    }
-    const workspaceContext = {
-      resolveRelativePath: (relativePath, resource) =>
-          URL.resolve(resource, relativePath)
-    };
-    
-    const m2p = new MonacoToProtocolConverter();
-    const p2m = new ProtocolToMonacoConverter();
-    const yamlService = getLanguageService( resolveSchema, workspaceContext, []);
-    const schemas = [{
-      uri:  'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
-      fileMatch: [ "*"]
-    }];
-    yamlService.configure({
-      validate: true,
-      schemas: schemas,
-      hover: true,
-      completion: true
-    });
-    
-    const pendingValidationRequests = new Map();
-    
-    monaco.languages.registerCompletionItemProvider(LANGUAGE_ID, {
-        provideCompletionItems(model, position, token) {
-            const document = createDocument(model);
-            return yamlService.doComplete(document, m2p.asPosition(position.lineNumber, position.column), true).then((list) => {
-                return p2m.asCompletionResult(list);
-            });
-        },
-    
-        resolveCompletionItem(item, token) {
-            return yamlService.doResolve(m2p.asCompletionItem(item)).then(result => p2m.asCompletionItem(result));
+        getEditor() {
+            return this.monacoRef.current.editor;
         }
-    });
-    
-    monaco.languages.registerDocumentFormattingEditProvider(LANGUAGE_ID, {
-      provideDocumentFormattingEdits(model,options,token) {
-        const document = createDocument(model);
-        let yamlFormatterSettings = {
-          singleQuote: false,
-          bracketSpacing: true,
-          proseWrap: 'preserve',
-          printWidth: 80,
-          enable: true
-      };
-        const edits = yamlService.doFormat(document, yamlFormatterSettings);
-        return p2m.asTextEdits(edits);
-      }
-    
-    });
-    
-    monaco.languages.registerDocumentSymbolProvider(LANGUAGE_ID, {
-        provideDocumentSymbols(model, token) {
-            const document = createDocument(model);
-            return p2m.asSymbolInformations(yamlService.findDocumentSymbols(document));
-        }
-    });
-    
-    monaco.languages.registerHoverProvider(LANGUAGE_ID, {
-        provideHover(model, position, token){
-            const document = createDocument(model);
-            return yamlService.doHover( document, m2p.asPosition(position.lineNumber, position.column)).then((hover) => {
-                return p2m.asHover(hover);
+
+        save() {
+            let obj;
+            try {
+                obj = safeLoad(this.getEditor().getValue());
+            } catch (e) {
+                this.handleError(`Error parsing YAML: ${e}`);
+                return;
+            }
+
+            if (!obj.apiVersion) {
+                this.handleError('No "apiVersion" field found in YAML.');
+                return;
+            }
+
+            if (!obj.kind) {
+                this.handleError('No "kind" field found in YAML.');
+                return;
+            }
+
+            const model = this.getModel(obj);
+            if (!model) {
+                this.handleError(`The server doesn't have a resource type "kind: ${obj.kind}, apiVersion: ${obj.apiVersion}".`);
+                return;
+            }
+
+            // If this is a namesapced resource, default to the active namespace when none is specified in the YAML.
+            if (!obj.metadata.namespace && model.namespaced) {
+                obj.metadata.namespace = this.props.activeNamespace;
+            }
+
+            const { namespace: newNamespace, name: newName } = obj.metadata;
+
+            if (!this.props.create && this.props.obj) {
+                const { namespace, name } = this.props.obj.metadata;
+
+                if (name !== newName) {
+                    this.handleError(`Cannot change resource name (original: "${name}", updated: "${newName}").`);
+                    return;
+                }
+                if (namespace !== newNamespace) {
+                    this.handleError(`Cannot change resource namespace (original: "${namespace}", updated: "${newNamespace}").`);
+                    return;
+                }
+                if (this.props.obj.kind !== obj.kind) {
+                    this.handleError(`Cannot change resource kind (original: "${this.props.obj.kind}", updated: "${obj.kind}").`);
+                    return;
+                }
+
+                const apiGroup = groupVersionFor(this.props.obj.apiVersion).group;
+                const newAPIGroup = groupVersionFor(obj.apiVersion).group;
+                if (apiGroup !== newAPIGroup) {
+                    this.handleError(`Cannot change API group (original: "${apiGroup}", updated: "${newAPIGroup}").`);
+                    return;
+                }
+
+            }
+
+            this.setState({ success: null, error: null }, () => {
+                let action = k8sUpdate;
+                let redirect = false;
+                if (this.props.create) {
+                    action = k8sCreate;
+                    delete obj.metadata.resourceVersion;
+                    redirect = true;
+                }
+                action(model, obj, newNamespace, newName)
+                    .then(o => {
+                        if (redirect) {
+                            history.push(this.props.redirectURL || resourceObjPath(o, referenceFor(o)));
+                            // TODO: (ggreer). show message on new page. maybe delete old obj?
+                            return;
+                        }
+                        const success = `${newName} has been updated to version ${o.metadata.resourceVersion}`;
+                        this.setState({ success, error: null });
+                        this.loadYaml(true, o);
+                        this.resize_();
+                    })
+                    .catch(e => this.handleError(e.message));
             });
         }
-    });
-    
-    getModel().onDidChangeContent((event) => {
-        validate();
-    });
-    
-    function validate() {
-        const document = createDocument(getModel());
-        cleanPendingValidation(document);
-        pendingValidationRequests.set(document.uri, setTimeout(() => {
-            pendingValidationRequests.delete(document.uri);
-            doValidate(document);
-        }));
-    }
-    
-    function cleanPendingValidation(document) {
-        const request = pendingValidationRequests.get(document.uri);
-        if (request !== undefined) {
-            clearTimeout(request);
-            pendingValidationRequests.delete(document.uri);
+
+        download(data = this.getEditor().getValue()) {
+            const blob = new Blob([data], { type: 'text/yaml;charset=utf-8' });
+            let filename = 'k8s-object.yaml';
+            try {
+                const obj = safeLoad(data);
+                if (obj.kind) {
+                    filename = `${obj.kind.toLowerCase()}-${obj.metadata.name}.yaml`;
+                }
+            } catch (unused) {
+                // unused
+            }
+            saveAs(blob, filename);
         }
-    }
-    
-    function doValidate(document) {
-        if (document.getText().length === 0) {
-            cleanDiagnostics();
-            return;
+
+        loadSampleYaml_(templateName = 'default', kind = referenceForModel(this.props.model)) {
+            const sampleObj = generateObjToLoad(kind, templateName, this.props.obj.metadata.namespace);
+            this.setState({ sampleObj });
+            this.loadYaml(true, sampleObj);
         }
-        yamlService.doValidation( document, true).then((diagnostics) => {
-            const markers = p2m.asDiagnostics(diagnostics);
-            monaco.editor.setModelMarkers(getModel(), 'default', markers);
-        });
-    }
-    
-    function cleanDiagnostics() {
-        monaco.editor.setModelMarkers(monaco.editor.getModel(MONACO_URI), 'default', []);
-    }
-  }
 
-  render() {
-      if (!this.props.create && !this.props.obj) {
-        return <Loading />;
-      }
+        downloadSampleYaml_(templateName = 'default', kind = referenceForModel(this.props.model)) {
+            const data = safeDump(generateObjToLoad(kind, templateName, this.props.obj.metadata.namespace));
+            this.download(data);
+        }
 
-      const { connectDropTarget, isOver, canDrop } = this.props;
-      const klass = classNames('co-file-dropzone-container', {'co-file-dropzone--drop-over': isOver});
+        registerYAMLLanguage() {
+            // register the YAML language with Monaco
+            monaco.languages.register({
+                id: 'yaml',
+                extensions: ['.yml', '.yaml'],
+                aliases: ['YAML', 'yaml'],
+                mimetypes: ['application/yaml']
+            });
+        }
 
-      const {error, success, stale, yaml, height} = this.state;
-      const {create, obj, download = true, header} = this.props;
-      const readOnly = this.props.readOnly || this.state.notAllowed;
-      const options = { readOnly, fixedOverflowWidgets: true };
-      const model = this.getModel(obj);
-      const editYamlComponent = <div className="co-file-dropzone">
-        { canDrop && <div className={klass}><p className="co-file-dropzone__drop-text">Drop file here</p></div> }
+        registerYAMLCompletion(languageID, monaco, m2p, p2m, createDocument, yamlService) {
+            monaco.languages.registerCompletionItemProvider(languageID, {
+                provideCompletionItems(model, position, token) {
+                    const document = createDocument(model);
+                    return yamlService.doComplete(document, m2p.asPosition(position.lineNumber, position.column), true).then((list) => {
+                        return p2m.asCompletionResult(list);
+                    });
+                },
 
-        <div>
-          {create && !this.props.hideHeader && <div className="yaml-editor__header">
-            <h1 className="yaml-editor__header-text">{header}</h1>
-            <p className="help-block">Create by manually entering YAML or JSON definitions, or by dragging and dropping a file into the editor.</p>
-          </div>}
-          <div className="co-p-has-sidebar">
-            <div className="co-p-has-sidebar__body">
-              <div className={classNames('yaml-editor', {'yaml-editor--readonly': readOnly})} ref={r => this.editor = r}>
-                {stale
-                  ? <MonacoDiffEditor
-                    ref={this.monacoRef}
-                    language="yaml"
-                    original={yaml}
-                    value={safeDump(this.props.obj)}
-                    height={height}
-                    options={{readOnly: true}}
-                  />
-                  : <MonacoEditor
-                    ref={this.monacoRef}
-                    language="yaml"
-                    theme="vs-dark"
-                    value={yaml}
-                    height={height}
-                    options={options}
-                    editorDidMount={this.editorDidMount}
-                  />}
-                <div className="yaml-editor__buttons" ref={r => this.buttons = r}>
-                  {error && <Alert isInline className="co-alert co-alert--scrollable" variant="danger" title="An error occurred"><div className="co-pre-line">{error}</div></Alert>}
-                  {success && <Alert isInline className="co-alert" variant="success" title={success} />}
-                  {stale && <Alert isInline className="co-alert" variant="info" title="This object has been updated.">Click reload to see the new version.</Alert>}
-                  {create && <button type="submit" className="btn btn-primary" id="save-changes" onClick={() => this.save()}>Create</button>}
-                  {!create && !readOnly && <button type="submit" className="btn btn-primary" id="save-changes" onClick={() => this.save()}>Save</button>}
-                  {!create && <button type="submit" className="btn btn-default" id="reload-object" onClick={() => this.reload()}>Reload</button>}
-                  <button className="btn btn-default" id="cancel" onClick={() => this.onCancel()}>Cancel</button>
-                  {download && <button type="submit" className="btn btn-default pull-right hidden-sm hidden-xs" onClick={() => this.download()}><i className="fa fa-download"></i>&nbsp;Download</button>}
+                resolveCompletionItem(item, token) {
+                    return yamlService.doResolve(m2p.asCompletionItem(item)).then(result => p2m.asCompletionItem(result));
+                }
+            });
+        }
+
+        registerYAMLDocumentSymbols(languageID, monaco, p2m, createDocument, yamlService) {
+            monaco.languages.registerDocumentSymbolProvider(languageID, {
+                provideDocumentSymbols(model, token) {
+                    const document = createDocument(model);
+                    return p2m.asSymbolInformations(yamlService.findDocumentSymbols(document));
+                }
+            });
+        }
+
+        registerYAMLHover(languageID, monaco, m2p, p2m, createDocument, yamlService) {
+            monaco.languages.registerHoverProvider(languageID, {
+                provideHover(model, position, token) {
+                    const document = createDocument(model);
+                    return yamlService.doHover(document, m2p.asPosition(position.lineNumber, position.column)).then((hover) => {
+                        return p2m.asHover(hover);
+                    });
+                }
+            });
+        }
+
+        YAMLValidation(monaco, p2m, monaco_uri, createDocument, yamlService) {
+            const pendingValidationRequests = new Map();
+
+            function getModel() {
+                return monaco.editor.getModels()[0];
+            }
+
+            getModel().onDidChangeContent((event) => {
+                validate();
+            });
+
+            function validate() {
+                const document = createDocument(getModel());
+                cleanPendingValidation(document);
+                pendingValidationRequests.set(document.uri, setTimeout(() => {
+                    pendingValidationRequests.delete(document.uri);
+                    doValidate(document);
+                }));
+            }
+
+            function cleanPendingValidation(document) {
+                const request = pendingValidationRequests.get(document.uri);
+                if (request !== undefined) {
+                    clearTimeout(request);
+                    pendingValidationRequests.delete(document.uri);
+                }
+            }
+
+            function doValidate(document) {
+                if (document.getText().length === 0) {
+                    cleanDiagnostics();
+                    return;
+                }
+                yamlService.doValidation(document, true).then((diagnostics) => {
+                    const markers = p2m.asDiagnostics(diagnostics);
+                    monaco.editor.setModelMarkers(getModel(), 'default', markers);
+                });
+            }
+
+            function cleanDiagnostics() {
+                monaco.editor.setModelMarkers(monaco.editor.getModel(monaco_uri), 'default', []);
+            }
+        }
+
+        createYAMLService() {
+            var resolveSchema = function (url) {
+                const promise = new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.onload = () => resolve(xhr.responseText);
+                    xhr.onerror = () => reject(xhr.statusText);
+                    xhr.open("GET", url, true);
+                    xhr.send();
+                    console.log('resolving schema ' + url);
+                });
+                return promise;
+            }
+
+            const workspaceContext = {
+                resolveRelativePath: (relativePath, resource) => URL.resolve(resource, relativePath)
+            };
+   
+            const yamlService = getLanguageService(resolveSchema, workspaceContext, []);
+            const schemas = [{
+                uri: 'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
+                fileMatch: ["*"]
+            }];
+            yamlService.configure({
+                validate: true,
+                schemas: schemas,
+                hover: true,
+                completion: true
+            });
+            return yamlService;
+        }
+
+        registerYAMLinMonaco(monaco) {
+            const LANGUAGE_ID = 'yaml';
+            const MODEL_URI = 'inmemory://model.yaml'
+            const MONACO_URI = monaco.Uri.parse(MODEL_URI);
+
+            /**
+             * This is a brutal hack that exists because react-monaco-editor passes the same monaco
+             * object each time. In other words, everytime this is hit you'll register all the
+             * providers again and get duplicate results everytime.
+             * 
+             * Monaco does not provide any apis for unregistering and checking if < 2 YAML languages
+             * exist (one is the default) and one is the initial registers is the best we can do. 
+             */
+            if (monaco.languages.getLanguages().filter(x => x.id === LANGUAGE_ID).length > 1) {
+                return;
+            }
+
+            const m2p = new MonacoToProtocolConverter();
+            const p2m = new ProtocolToMonacoConverter();
+
+            function createDocument(model) {
+                return TextDocument.create(MODEL_URI, model.getModeId(), model.getVersionId(), model.getValue());
+            }
+
+            this.registerYAMLLanguage(); //register the YAML language with monaco
+            const yamlService = this.createYAMLService();
+            
+            this.registerYAMLCompletion(LANGUAGE_ID, monaco, m2p, p2m, createDocument, yamlService);
+            this.registerYAMLDocumentSymbols(LANGUAGE_ID, monaco, p2m, createDocument, yamlService);
+            this.registerYAMLHover(LANGUAGE_ID, monaco, m2p, p2m, createDocument, yamlService);
+            this.YAMLValidation(monaco, p2m, MONACO_URI, createDocument, yamlService);
+
+        }
+
+        render() {
+            if (!this.props.create && !this.props.obj) {
+                return <Loading />;
+            }
+
+            const { connectDropTarget, isOver, canDrop } = this.props;
+            const klass = classNames('co-file-dropzone-container', { 'co-file-dropzone--drop-over': isOver });
+
+            const { error, success, stale, yaml, height } = this.state;
+            const { create, obj, download = true, header } = this.props;
+            const readOnly = this.props.readOnly || this.state.notAllowed;
+            const options = { readOnly, fixedOverflowWidgets: true };
+            const model = this.getModel(obj);
+            const editYamlComponent = <div className="co-file-dropzone">
+                {canDrop && <div className={klass}><p className="co-file-dropzone__drop-text">Drop file here</p></div>}
+
+                <div>
+                    {create && !this.props.hideHeader && <div className="yaml-editor__header">
+                        <h1 className="yaml-editor__header-text">{header}</h1>
+                        <p className="help-block">Create by manually entering YAML or JSON definitions, or by dragging and dropping a file into the editor.</p>
+                    </div>}
+                    <div className="co-p-has-sidebar">
+                        <div className="co-p-has-sidebar__body">
+                            <div className={classNames('yaml-editor', { 'yaml-editor--readonly': readOnly })} ref={r => this.editor = r}>
+                                {stale
+                                    ? <MonacoDiffEditor
+                                        ref={this.monacoRef}
+                                        language="yaml"
+                                        original={yaml}
+                                        value={safeDump(this.props.obj)}
+                                        height={height}
+                                        options={{ readOnly: true }}
+                                    />
+                                    : <MonacoEditor
+                                        ref={this.monacoRef}
+                                        language="yaml"
+                                        theme="vs-dark"
+                                        value={yaml}
+                                        height={height}
+                                        options={options}
+                                        editorDidMount={this.editorDidMount}
+                                    />}
+                                <div className="yaml-editor__buttons" ref={r => this.buttons = r}>
+                                    {error && <Alert isInline className="co-alert co-alert--scrollable" variant="danger" title="An error occurred"><div className="co-pre-line">{error}</div></Alert>}
+                                    {success && <Alert isInline className="co-alert" variant="success" title={success} />}
+                                    {stale && <Alert isInline className="co-alert" variant="info" title="This object has been updated.">Click reload to see the new version.</Alert>}
+                                    {create && <button type="submit" className="btn btn-primary" id="save-changes" onClick={() => this.save()}>Create</button>}
+                                    {!create && !readOnly && <button type="submit" className="btn btn-primary" id="save-changes" onClick={() => this.save()}>Save</button>}
+                                    {!create && <button type="submit" className="btn btn-default" id="reload-object" onClick={() => this.reload()}>Reload</button>}
+                                    <button className="btn btn-default" id="cancel" onClick={() => this.onCancel()}>Cancel</button>
+                                    {download && <button type="submit" className="btn btn-default pull-right hidden-sm hidden-xs" onClick={() => this.download()}><i className="fa fa-download"></i>&nbsp;Download</button>}
+                                </div>
+                            </div>
+                        </div>
+                        {create && <ResourceSidebar isCreateMode={create} kindObj={model} height={this.state.height} loadSampleYaml={this.loadSampleYaml_} downloadSampleYaml={this.downloadSampleYaml_} />}
+                        {!create && <ExploreTypeSidebar kindObj={model} height={this.state.height} />}
+                    </div>
                 </div>
-              </div>
-            </div>
-            {create && <ResourceSidebar isCreateMode={create} kindObj={model} height={this.state.height} loadSampleYaml={this.loadSampleYaml_} downloadSampleYaml={this.downloadSampleYaml_} />}
-            {!create && <ExploreTypeSidebar kindObj={model} height={this.state.height} />}
-          </div>
-        </div>
-      </div>;
+            </div>;
 
-      return _.isFunction(connectDropTarget) ? connectDropTarget(editYamlComponent) : editYamlComponent;
+            return _.isFunction(connectDropTarget) ? connectDropTarget(editYamlComponent) : editYamlComponent;
+        }
     }
-  }
 );
 
