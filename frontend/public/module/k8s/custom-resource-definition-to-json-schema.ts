@@ -1,4 +1,4 @@
-function resolveCustomResourceDefinition(yamlContent) {
+export function resolveCustomResourceDefinition(yamlContent) {
 
     // Todo add guards
     const crdGroup = yamlContent.spec.group;

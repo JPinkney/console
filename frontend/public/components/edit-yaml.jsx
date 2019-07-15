@@ -13,6 +13,8 @@ import { ExploreTypeSidebar } from './sidebars/explore-type-sidebar';
 import { ResourceSidebar } from './sidebars/resource-sidebar';
 import { yamlTemplates } from '../models/yaml-templates';
 import { getStoredSwagger } from '../module/k8s/swagger';
+import { OpenAPItoJSONSchema } from '../module/k8s/openapi-to-json-schema';
+import { resolveCustomResourceDefinition } from '../module/k8s/custom-resource-definition-to-json-schema';
 
 import { getLanguageService, TextDocument, SchemaRequestService, CustomFormatterOptions } from "yaml-language-server";
 import { MonacoToProtocolConverter, ProtocolToMonacoConverter } from 'monaco-languageclient/lib/monaco-converter';
@@ -41,6 +43,7 @@ export const EditYAML = connect(stateToProps)(
     class EditYAML extends React.Component {
         constructor(props) {
             super(props);
+            console.log(props);
             this.state = {
                 error: null,
                 success: null,
@@ -48,9 +51,7 @@ export const EditYAML = connect(stateToProps)(
                 initialized: false,
                 stale: false,
                 sampleObj: props.sampleObj,
-                fileUpload: props.fileUpload,
-                isCRDLoaded: false,
-                crdItems: []
+                fileUpload: props.fileUpload
             };
             this.monacoRef = React.createRef();
             this.resize_ = () => {
@@ -442,10 +443,29 @@ export const EditYAML = connect(stateToProps)(
             };
    
             const yamlService = getLanguageService(resolveSchema, workspaceContext, []);
+            
+            // Prepare the schema
+            const yamlOpenAPI = getStoredSwagger();
+
+            // Convert the openAPI schema to something the language server understands
+            const kubernetesJSONSchema = OpenAPItoJSONSchema(yamlOpenAPI);
+            console.log(kubernetesJSONSchema);
+
+            if (this.props.crd) {
+                // We are dealing with a view that has a specific crd schema associated with it
+                const s = resolveCustomResourceDefinition(this.props.obj);
+                console.log(s);
+            }
+
             const schemas = [{
-                uri: 'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
-                fileMatch: ["*"]
+                uri: 'inmemory:yaml',
+                fileMatch: ["*"],
+                schema: kubernetesJSONSchema
             }];
+            // const schemas = [{
+            //     uri: 'https://raw.githubusercontent.com/garethr/kubernetes-json-schema/master/v1.14.0-standalone-strict/all.json',
+            //     fileMatch: ["*"]
+            // }];
             yamlService.configure({
                 validate: true,
                 schemas: schemas,

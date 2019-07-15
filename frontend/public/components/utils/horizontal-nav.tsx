@@ -10,6 +10,7 @@ import { AsyncComponent } from './async';
 import { K8sResourceKind } from '../../module/k8s';
 
 const editYamlComponent = (props) => <AsyncComponent loader={() => import('../edit-yaml').then(c => c.EditYAML)} obj={props.obj} />;
+export const editYamlCrdComponent = (props) => <AsyncComponent loader={() => import('../edit-yaml').then(c => c.EditYAML)} obj={props.obj} crd={true} />;
 export const viewYamlComponent = (props) => <AsyncComponent loader={() => import('../edit-yaml').then(c => c.EditYAML)} obj={props.obj} readOnly={true} />;
 
 class PodsComponent extends React.PureComponent<PodsComponentProps> {

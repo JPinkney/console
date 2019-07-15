@@ -11,10 +11,26 @@ export function OpenAPItoJSONSchema(openAPI: any) {
 
     const convertedOpenAPI = convertGroupVersionKindToJSONSchema(openAPI);
     
+    const p = [];
+    const definitions = {
+
+    };
+    for (const c in convertedOpenAPI) {
+        if (convertedOpenAPI.hasOwnProperty(c)) {
+            definitions[c] = convertedOpenAPI[c];
+            p.push(
+                {
+                    "$ref": '#/definitions/'+c
+                }
+            );
+        }
+    }
+
     return {
         "definitions": {
-            convertedOpenAPI
-        }
+            ...definitions
+        },
+        "oneOf": p
     };
 }
 
@@ -27,16 +43,18 @@ export function OpenAPItoJSONSchema(openAPI: any) {
 function convertGroupVersionKindToJSONSchema(openAPI: any) {
     for (const definition in openAPI) {
         if (openAPI.hasOwnProperty(definition)) {
-            const groupVersionKind = openAPI['x-kubernetes-group-version-kind'];
+            const openAPIDefinition = openAPI[definition];
+            const groupVersionKind = openAPIDefinition['x-kubernetes-group-version-kind'];
 
             // If this object has x-kubernetes-group-version-kind then add their values into correct places in JSON Schema
             if (groupVersionKind) {
                 const gvkEnums = groupVersionKindToEnums(groupVersionKind);
-                createOrAppendAPIVersion(definition, gvkEnums.versionEnum);
-                createOrAppendKind(definition, gvkEnums.kindEnum);
+                createOrAppendAPIVersion(openAPIDefinition['properties'], gvkEnums.versionEnum);
+                createOrAppendKind(openAPIDefinition['properties'], gvkEnums.kindEnum);
             }
         }
     }
+    return openAPI;
 }
 
 /**
@@ -64,7 +82,11 @@ function groupVersionKindToEnums(gvkObjArray: [GroupVersionKind]) {
  */
 function createOrAppendAPIVersion(openAPI: any, apiVersionEnum: string[]) {
     if (openAPI['apiVersion']) {
-        openAPI['apiVersion'].enum.push(...apiVersionEnum);
+        if(openAPI['apiVersion'].enum){
+            openAPI['apiVersion'].enum.push(...apiVersionEnum);
+        } else {
+            openAPI['apiVersion'].enum = apiVersionEnum;
+        }
     } else {
         openAPI['apiVersion'] = {
             enum: apiVersionEnum
@@ -77,7 +99,11 @@ function createOrAppendAPIVersion(openAPI: any, apiVersionEnum: string[]) {
  */
 function createOrAppendKind(openAPI: any, kindEnum: string[]) {
     if (openAPI['kind']) {
-        openAPI['kind'].enum.push(...kindEnum);
+        if(openAPI['kind'].enum){
+            openAPI['kind'].enum.push(...kindEnum);
+        } else {
+            openAPI['kind'].enum = kindEnum;
+        }
     } else {
         openAPI['kind'] = {
             enum: kindEnum

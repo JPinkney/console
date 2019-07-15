@@ -5,6 +5,7 @@ import { sortable } from '@patternfly/react-table';
 import { DetailsPage, ListPage, Table, TableRow, TableData } from './factory';
 import { Kebab, navFactory, ResourceKebab, ResourceLink, ResourceSummary, SectionHeading } from './utils';
 import { K8sResourceKind, referenceForCRD } from '../module/k8s';
+import { editYamlCrdComponent } from './utils/horizontal-nav';
 
 const { common } = Kebab.factory;
 
@@ -111,7 +112,7 @@ const Details = ({obj: crd}) => {
 export const CustomResourceDefinitionsList: React.SFC<CustomResourceDefinitionsListProps> = props => <Table {...props} aria-label="Custom Resource Definitions" Header={CRDTableHeader} Row={CRDTableRow} defaultSortField="spec.names.kind" virtualize />;
 
 export const CustomResourceDefinitionsPage: React.SFC<CustomResourceDefinitionsPageProps> = props => <ListPage {...props} ListComponent={CustomResourceDefinitionsList} kind="CustomResourceDefinition" canCreate={true} />;
-export const CustomResourceDefinitionsDetailsPage = props => <DetailsPage {...props} menuActions={menuActions} pages={[navFactory.details(Details), navFactory.editYaml()]} />;
+export const CustomResourceDefinitionsDetailsPage = props => <DetailsPage {...props} menuActions={menuActions} pages={[navFactory.details(Details), navFactory.editYaml(editYamlCrdComponent)]} />;
 
 export type CustomResourceDefinitionsListProps = {
 };
