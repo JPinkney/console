@@ -25,6 +25,9 @@ const config: webpack.Configuration = {
   },
   resolve: {
     extensions: ['.glsl', '.ts', '.tsx', '.js', '.jsx'],
+    alias: {
+      "prettier": ""
+    }
   },
   node: {
     fs: 'empty',
