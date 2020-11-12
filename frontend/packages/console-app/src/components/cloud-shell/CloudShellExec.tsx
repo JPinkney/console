@@ -66,7 +66,7 @@ const CloudShellExec: React.FC<CloudShellExecProps> = ({
   React.useEffect(() => {
     let unmounted: boolean;
     const usedClient = flags[FLAGS.OPENSHIFT] ? 'oc' : 'kubectl';
-    const cmd = shcommand || ['sh', '-i', '-c', 'TERM=xterm sh'];
+    const cmd = shcommand || ['sh', '-i', '-c', 'resize 2>/dev/null; TERM=xterm sh'];
     const subprotocols = (impersonate?.subprotocols || []).concat('base64.channel.k8s.io');
 
     const urlOpts = {
